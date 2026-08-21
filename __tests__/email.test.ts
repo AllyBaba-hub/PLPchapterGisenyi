@@ -1,0 +1,3 @@
+import {renderEmailTemplate,statusEvent} from '@/services/email';
+test('status maps to email events',()=>{expect(statusEvent('APPROVED')).toBe('APPLICATION_APPROVED');expect(statusEvent('REJECTED')).toBe('APPLICATION_REJECTED');expect(statusEvent('ACTIVE')).toBe('MEMBER_ACTIVATED');expect(statusEvent('SUSPENDED')).toBe('MEMBER_SUSPENDED');expect(statusEvent('PENDING')).toBe('APPLICATION_SUBMITTED')});
+test('approval template is branded and professional',()=>{const email=renderEmailTemplate('APPLICATION_APPROVED',{fullName:'Aline',email:'a@example.com'},{status:'APPROVED'});expect(email.text).toContain('Welcome to PLP Gisenyi, your application is approved.');expect(email.html).toContain('PLP Chapter Gisenyi');expect(email.text).not.toContain('admin notes')});
