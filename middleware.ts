@@ -1,0 +1,3 @@
+import {NextRequest,NextResponse} from 'next/server';
+export async function middleware(req:NextRequest){const role=req.cookies.get('plp-role')?.value;const path=req.nextUrl.pathname;if(path.startsWith('/admin')&&!['ADMIN','SUPER_ADMIN'].includes(role||''))return NextResponse.redirect(new URL('/login',req.url));if(path.startsWith('/admin/audit')&&role!=='SUPER_ADMIN')return NextResponse.redirect(new URL('/admin',req.url));if(path.startsWith('/member')&&!role)return NextResponse.redirect(new URL('/login',req.url));return NextResponse.next()}
+export const config={matcher:['/admin/:path*','/member/:path*']}
