@@ -1,0 +1,2 @@
+import {canAccessRoute,canManageMembers,canViewAuditLogs,hasRole} from '@/lib/rbac';
+test('role hierarchy and permissions',()=>{expect(hasRole('SUPER_ADMIN','ADMIN')).toBe(true);expect(hasRole('MEMBER','ADMIN')).toBe(false);expect(canManageMembers('ADMIN')).toBe(true);expect(canViewAuditLogs('ADMIN')).toBe(false);expect(canAccessRoute('SUPER_ADMIN','/admin/audit')).toBe(true);expect(canAccessRoute('MEMBER','/admin')).toBe(false);});
