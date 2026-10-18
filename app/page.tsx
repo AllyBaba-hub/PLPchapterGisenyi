@@ -1,1 +1,0 @@
-export default function Home(){return <main className="p-8"><h1>PLP Chapter Gisenyi Website & Management System</h1><p>Secure membership, events, news, gallery, reports, and audit management powered by Supabase.</p></main>}
