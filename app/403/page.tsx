@@ -1,0 +1,1 @@
+export default function Forbidden() { return <main className="p-8 text-center"><h1 className="text-2xl font-bold">403 - Access denied</h1><p>You do not have permission to view this page.</p><a className="underline" href="/">Go to home page</a></main>; }

@@ -1,0 +1,1 @@
+export default function Profile() { return <main className="p-8"><h1>My profile</h1><p>Update your phone number, school, address, occupation and skills. Your name, role and membership ID can only be changed by the committee.</p></main>; }

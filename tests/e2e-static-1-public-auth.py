@@ -1,0 +1,66 @@
+import os, json, re, sys
+from playwright.sync_api import sync_playwright
+URL="file://"+os.path.abspath("index.html")
+errs=[]; res=[]
+def ok(name,cond,extra=""):
+    res.append((name,bool(cond))); print(("PASS " if cond else "FAIL ")+name+(" :: "+str(extra) if (extra and not cond) else ""))
+with sync_playwright() as p:
+    b=p.chromium.launch(); ctx=b.new_context(viewport={'width':1280,'height':900},accept_downloads=True); pg=ctx.new_page()
+    pg.on("console",lambda m: errs.append(m.text) if m.type=="error" else None); pg.on("pageerror",lambda e: errs.append("PAGEERR "+str(e)))
+    def go(h): pg.goto(URL+"#"+h); pg.wait_for_timeout(250)
+    go("/"); ok("home renders hero",pg.locator("h1:has-text('PLP Chapter Gisenyi')").count()>0)
+    ok("home nav has 7 links",pg.locator("#mainnav a[href^='#/']").count()>=7)
+    ok("empty states shown (no mock data)",pg.locator(".empty").count()>=3)
+    for r in ["/about","/events","/gallery","/news","/join","/contact","/privacy","/terms","/nonexistent"]:
+        go(r); ok("route "+r,pg.locator("main h1").count()>0)
+    go("/login"); ok("login redirects to setup first run",pg.url.endswith("#/setup"))
+    go("/admin"); ok("admin w/o session -> login/setup",("#/setup" in pg.url) or ("#/login" in pg.url))
+    # setup
+    go("/setup"); pg.fill("[name=full_name]","Alice Super"); pg.fill("[name=email]","alice@plp.rw"); pg.fill("[name=password]","weak"); pg.fill("[name=confirm]","weak"); pg.click("button[type=submit]"); pg.wait_for_timeout(300)
+    ok("weak password rejected",pg.locator(".field-error").count()>0)
+    pg.fill("[name=password]","Strong123"); pg.fill("[name=confirm]","Strong123"); pg.click("button[type=submit]"); pg.wait_for_timeout(800)
+    ok("setup -> admin overview",pg.url.endswith("#/admin") and pg.locator("h1:has-text('Dashboard overview')").count()>0)
+    sidebar=pg.locator("#side nav a").all_inner_texts(); print("   super sidebar:",[s.split("\n")[0] for s in sidebar])
+    ok("super admin sees audit+roles+settings",all(any(x in s for s in sidebar) for x in ["Audit Logs","Roles","System Settings"]))
+    pg.click("[data-action=logout]"); pg.wait_for_timeout(300); ok("logout -> login",pg.url.endswith("#/login"))
+    # failed login
+    pg.fill("[name=email]","alice@plp.rw"); pg.fill("[name=password]","Wrong1234"); pg.click("button[type=submit]"); pg.wait_for_timeout(600)
+    ok("failed login generic msg",pg.locator(".login-err:has-text('Invalid email or password')").count()==1)
+    # join validation
+    go("/join"); pg.click("button[type=submit]"); pg.wait_for_timeout(200)
+    n=pg.locator(".field-error").count(); ok("join empty -> many errors",n>=8,n)
+    vals=dict(full_name="Bob Member",email="bob@example.com",phone="+250788000111",date_of_birth="2004-05-01",school="GS Gisenyi",graduation_year="2022",district="Rubavu",sector="Gisenyi",cell="Umuganda",village="Kabeza",occupation="Student",skills="Singing",motivation="I want to serve my community and grow as a leader.")
+    for k,v in vals.items(): pg.fill(f"[name={k}]",v)
+    pg.click("button[type=submit]"); pg.wait_for_timeout(300)
+    ok("join blocked without agreement",pg.locator(".field-error:has-text('Membership Agreement')").count()==1)
+    pg.check("[name=agreement_accepted]"); pg.click("button[type=submit]"); pg.wait_for_timeout(400)
+    ok("join success shows PENDING",pg.locator("text=Application received").count()==1)
+    go("/about"); go("/join")
+    for k,v in vals.items(): pg.fill(f"[name={k}]",v)
+    pg.check("[name=agreement_accepted]"); pg.click("button[type=submit]"); pg.wait_for_timeout(300)
+    ok("duplicate application blocked",pg.locator(".field-error:has-text('already registered')").count()==1)
+    # contact
+    go("/contact"); pg.fill("[name=name]","Carol"); pg.fill("[name=email]","carol@example.com"); pg.fill("[name=subject]","Hello"); pg.fill("[name=message]","How can I volunteer with you?"); pg.click("button[type=submit]"); pg.wait_for_timeout(300)
+    ok("contact sent",pg.locator("text=Message sent").count()==1)
+    # admin login + approve
+    go("/login"); pg.fill("[name=email]","alice@plp.rw"); pg.fill("[name=password]","Strong123"); pg.click("button[type=submit]"); pg.wait_for_timeout(900)
+    ok("login -> /admin",pg.url.endswith("#/admin"))
+    go("/admin/applications"); pg.wait_for_timeout(200); ok("pending app listed",pg.locator("td:has-text('Bob Member')").count()>=1)
+    pg.click("[data-action=app-review]"); pg.wait_for_timeout(200); ok("review modal shows motivation+agreement",pg.locator(".modal:has-text('Yes, on')").count()==1 and pg.locator(".modal:has-text('serve my community')").count()==1)
+    pg.click("[data-action=app-approve]"); pg.wait_for_timeout(200); pg.click("#cok"); pg.wait_for_timeout(500)
+    ok("approved toast with membership id",pg.locator(".toast:has-text('PLP-GSY-')").count()>=1)
+    st=pg.evaluate("()=>{const d=JSON.parse(localStorage.getItem('plp_gisenyi_db_v1'));return {m:d.members.length,u:d.users.length,e:d.emails.map(x=>x.event),a:d.audit_logs.map(x=>x.action),app:d.applications[0].status,mid:d.members[0].membership_id}}")
+    print("   ",st)
+    ok("member+user created, APPROVED",st['m']==1 and st['u']==2 and st['app']=='APPROVED' and st['mid'].startswith('PLP-GSY-'))
+    ok("welcome+submitted emails queued",'APPLICATION_APPROVED' in st['e'] and 'APPLICATION_SUBMITTED' in st['e'])
+    ok("audit has approved/created/submitted/login/failed",all(x in st['a'] for x in ['APPLICATION_APPROVED','MEMBER_CREATED','APPLICATION_SUBMITTED','LOGIN_SUCCESS','LOGIN_FAILED','LOGOUT']))
+    link=pg.evaluate("()=>{const d=JSON.parse(localStorage.getItem('plp_gisenyi_db_v1'));const e=d.emails.find(x=>x.event==='APPLICATION_APPROVED');return e.text.match(/https?:\\/\\/\\S+|file:\\/\\/\\S+/)[0]}")
+    ok("welcome email text has approval sentence",pg.evaluate("()=>JSON.parse(localStorage.getItem('plp_gisenyi_db_v1')).emails.find(x=>x.event==='APPLICATION_APPROVED').text.includes('Welcome to PLP Gisenyi, your application is approved.')"))
+    open("/tmp/state.json","w").write(json.dumps({"link":link}))
+    # save storage for continuation
+    ctx.storage_state(path="/tmp/state_ctx.json")
+    # save localStorage manually (file:// origin)
+    ls=pg.evaluate("()=>JSON.stringify(Object.assign({},localStorage))"); open("/tmp/ls.json","w").write(ls)
+    b.close()
+print("\nconsole errors:",errs)
+print("PASSED",sum(1 for _,c in res if c),"of",len(res))

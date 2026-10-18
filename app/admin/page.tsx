@@ -1,0 +1,1 @@
+import {BrandLogo} from '@/components/BrandLogo';export default function Admin(){return <main className="p-8"><header className="mb-6"><BrandLogo/></header><h1>Admin Dashboard</h1><p>Manage member approvals, roles, events, news, gallery uploads, reports, and audit logs.</p></main>}

@@ -1,0 +1,1 @@
+import {test,expect} from '@playwright/test';test('public home and login branding render',async({page})=>{await page.goto('/');await expect(page.getByText('PLP Chapter Gisenyi')).toBeVisible();await page.goto('/login');await expect(page.getByAltText('PLP Chapter Gisenyi logo')).toBeVisible();});
